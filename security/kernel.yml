@@ -1,0 +1,67 @@
+- name: Harden Linux kernel
+  hosts: "{{ target_hosts | default('linux') }}"
+  become: yes
+
+  vars:
+    reboot_systems: yes
+    kernel_parameters:
+      - name: kernel.randomize_va_space
+        value: 2
+        reload: yes
+
+      - name: net.ipv4.conf.all.accept_source_route
+        value: 0
+        reload: yes
+
+      - name: net.ipv4.conf.default.accept_redirects
+        value: 0
+        reload: yes
+
+      - name: net.ipv4.conf.all.send_redirects
+        value: 0
+        reload: yes
+
+      - name: net.ipv4.ip_forward
+        value: 0
+        reload: yes
+
+      - name: net.ipv6.conf.all.accept_source_route
+        value: 0
+        reload: yes
+
+      - name: kernel.panic
+        value: 2
+        reload: no
+
+  tasks:
+    - name: RHEL | Set sysctl_file path
+      set_fact:
+        sysctl_file: /usr/lib/sysctl.d/50-default.conf
+      when:
+        - ansible_distribution == 'RedHat'
+        - ansible_distribution_major_version | version_compare('7', '=')
+
+    - name: Set kernel parameters
+      sysctl:
+        name: "{{ item.name }}"
+        value: "{{ item.value | default(omit) }}"
+        state: "{{ item.state | default(omit) }}"
+        reload: "{{ item.reload | default(omit) }}"
+        ignoreerrors: "{{ item.ignoreerrors | default(omit) }}"
+        sysctl_file: "{{ sysctl_file | default(omit) }}"
+      with_items: "{{ kernel_parameters }}"
+      notify:
+        - reboot system
+        - wait for system to come back up
+
+  handlers:
+    - name: reboot system
+      shell: sleep 2 && shutdown -r now
+      async: 5
+      poll: 0
+      when: reboot_systems
+
+    - name: wait for system to come back up
+      wait_for_connection:
+        delay: 15
+      when: reboot_systems

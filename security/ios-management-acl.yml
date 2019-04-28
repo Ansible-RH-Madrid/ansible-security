@@ -1,0 +1,24 @@
+- name: Restrict access to management interfaces
+  hosts: "{{ target_hosts | default('ios') }}"
+  gather_facts: no
+  connection: local
+
+  tasks:
+    - name: Create management ACL
+      ios_config:
+        match: strict
+        before: no ip access-list extended mgmnt
+        parents: ip access-list extended mgmnt
+        lines:
+          - permit ip host 192.168.1.99 any log
+          - permit ip host 192.168.1.121 any log
+          - permit ip 10.11.0.0 0.0.0.255 any log
+
+    - name: Harden VTY lines
+      ios_config:
+        parents:
+          - line vty 0 4
+        lines:
+          - exec-timeout 15 0
+          - transport input ssh
+          - access-class mgmnt in
